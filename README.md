@@ -28,3 +28,9 @@ Or start manually via Node:
 node server.js
 ```
 Then navigate to `http://localhost:8085` in your browser.
+
+### Development Approach
+SkyView is a personal project combining aviation interests, systems integration and application development. Document the development tools and AI-assisted workflows used where relevant.
+
+### Disclaimer
+This is an independent personal project and is not an official aviation tracking or air traffic control system.
