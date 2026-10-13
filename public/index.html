@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkyView - Tactical Radar & Starfield Projection</title>
+  <!-- SEO & Description -->
+  <meta name="description" content="Ceiling projection flight tracker dashboard with real-time RTL-SDR integration, canvas starfield, HUD avionics, and voice commentary.">
+  <!-- Fonts: Orbitron for tech HUD, Outfit for metadata and numbers -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Outfit:wght@200;400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✈️</text></svg>">
+</head>
+<body>
+
+  <!-- Main Viewport that can be scaled, rotated, or flipped for projection -->
+  <div id="projection-container" class="normal-view">
+    
+    <!-- Background starfield canvas -->
+    <canvas id="starfield"></canvas>
+    
+    <!-- Atmospheric gradient cover -->
+    <div class="sky-glow"></div>
+    
+    <!-- Main Radar Screen -->
+    <div class="radar-viewport">
+      <!-- High performance vector graphics canvas -->
+      <canvas id="radar-canvas"></canvas>
+      
+      <!-- Avionics HUD (Head-Up Display) Overlay -->
+      <div id="hud-overlay">
+        <!-- Center Pitch Ladder -->
+        <div class="pitch-ladder">
+          <div class="hud-line main-horizon"></div>
+          <div class="hud-line pitch-10-up"></div>
+          <div class="hud-line pitch-10-down"></div>
+          <div class="hud-pitch-marker">00</div>
+        </div>
+        
+        <!-- Heading Tape at the top -->
+        <div class="heading-tape-container">
+          <div class="heading-tape" id="heading-tape">
+            <span class="heading-mark">N</span>
+            <span class="heading-num">030</span>
+            <span class="heading-num">060</span>
+            <span class="heading-mark">E</span>
+            <span class="heading-num">120</span>
+            <span class="heading-num">150</span>
+            <span class="heading-mark">S</span>
+            <span class="heading-num">210</span>
+            <span class="heading-num">240</span>
+            <span class="heading-mark">W</span>
+            <span class="heading-num">300</span>
+            <span class="heading-num">330</span>
+          </div>
+          <div class="heading-cursor"></div>
+        </div>
+
+        <!-- Target acquired indicator warning (Cockpit Lock Alarm) -->
+        <div id="tactical-lock-warning" class="hud-alert-overlay hidden">
+          <div class="alert-box">
+            <div class="alert-icon">⚠️</div>
+            <div class="alert-text">
+              <span class="alert-title">CONTACT ACQUIRED</span>
+              <span class="alert-details" id="lock-details">TACTICAL TARGET LOCK ON BOGEY</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UI Overlay: Control Panel and Flight Logs (Glassmorphic) -->
+    <div class="interface-overlay">
+      <!-- Header bar with diagnostics -->
+      <header class="app-header">
+        <div class="brand">
+          <span class="indicator-glow" id="status-glow"></span>
+          <h1>SKYVIEW <span class="sub">TAC-RADAR v1.0</span></h1>
+        </div>
+        <div class="receiver-telemetry">
+          <span class="telemetry-item">RADAR SCAN: <span class="value" id="radar-scan-status">ACTIVE</span></span>
+          <span class="telemetry-item">CONTACTS: <span class="value" id="contacts-count">0</span></span>
+          <span class="telemetry-item">SYS TEMP: <span class="value">NORMAL</span></span>
+        </div>
+      </header>
+
+      <!-- Sidebar: Tactical AWACS log -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <h2>TACTICAL CONTACT LOG</h2>
+          <button id="toggle-sidebar-btn" title="Collapse Panel">◀</button>
+        </div>
+        <div class="flight-list-container">
+          <ul id="flight-list" class="flight-list">
+            <!-- Dynamically populated via JS -->
+            <li class="empty-list-msg">NO TARGETS IN RANGE</li>
+          </ul>
+        </div>
+        
+        <!-- Live Selected Flight Details Block -->
+        <div id="target-detail-panel" class="detail-panel hidden">
+          <div class="detail-header">
+            <span class="target-badge" id="target-category">COMMERCIAL</span>
+            <h3 id="target-callsign">QFA421</h3>
+          </div>
+          <div class="detail-grid">
+            <div class="detail-row">
+              <span class="label">AIRLINE</span>
+              <span class="value" id="target-airline">Qantas</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">MODEL</span>
+              <span class="value" id="target-model">Boeing 737-800</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">ALTITUDE</span>
+              <span class="value" id="target-altitude">32,000 ft (FL320)</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">SPEED</span>
+              <span class="value" id="target-speed">450 kts</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">HEADING</span>
+              <span class="value" id="target-heading">045° NE</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">RANGE</span>
+              <span class="value" id="target-range">12.5 NM</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">TRANSIT</span>
+              <span class="value" id="target-transit">INBOUND ▼</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">SQUAWK</span>
+              <span class="value" id="target-squawk">1200</span>
+            </div>
+
+          </div>
+          <button id="lock-target-btn" class="hud-btn tactical">LOCK RADAR TRACK</button>
+        </div>
+      </aside>
+
+      <!-- Bottom HUD Quick Status Toolbar -->
+      <footer class="hud-footer">
+        <div class="footer-left">
+          <button id="menu-toggle-btn" class="hud-btn glow-active">⚙️ SYSTEM MENU</button>
+          <button id="simulation-toggle-btn" class="hud-btn selector-btn">MODE: SIMULATOR</button>
+        </div>
+        <div class="footer-center">
+          <div class="audio-controls">
+            <button id="mute-btn" class="hud-btn circle" title="Mute Sound">🔊</button>
+            <button id="voice-test-btn" class="hud-btn" title="Trigger Voice Update">📣 TEST VOICE</button>
+          </div>
+        </div>
+        <div class="footer-right">
+          <span class="time-block" id="utc-clock">00:00:00 UTC</span>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Glassmorphic Settings Modal Menu (Collapsible overlay) -->
+    <div id="settings-modal" class="settings-modal hidden">
+      <div class="settings-content">
+        <div class="settings-header">
+          <h2>SYSTEM PREFERENCES & OPTICS</h2>
+          <button id="close-settings-btn" class="close-btn">&times;</button>
+        </div>
+        <div class="settings-body">
+          <div class="settings-section">
+            <h3>📡 RECEIVER CONNECTION</h3>
+            <div class="input-group">
+              <label for="connection-mode">Data Source Mode</label>
+              <select id="connection-mode">
+                <option value="simulated">Simulation Mode (Demo flights)</option>
+                <option value="live">RTL-SDR Live Receiver (dump1090)</option>
+              </select>
+            </div>
+            <div id="live-settings-group" class="hidden">
+              <div class="input-group">
+                <label for="dump1090-url">dump1090 / tar1090 Address</label>
+                <input type="text" id="dump1090-url" value="http://localhost:8080" placeholder="e.g. http://localhost:8080 or http://192.168.1.100:8080">
+              </div>
+              <div class="input-group inline">
+                <div>
+                  <label for="receiver-lat">Receiver Latitude</label>
+                  <input type="number" id="receiver-lat" step="0.00001" value="-33.8688">
+                </div>
+                <div>
+                  <label for="receiver-lon">Receiver Longitude</label>
+                  <input type="number" id="receiver-lon" step="0.00001" value="151.2093">
+                </div>
+              </div>
+              <div class="info-note">
+                Receiver coordinates are used to calculate the relative bearing and distance of airplanes. Leave coordinates as default if you want them auto-detected from dump1090's receiver settings.
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>🗣️ AWACS VOICE COMMENTARY</h3>
+            <div class="input-group">
+              <label for="voice-style">Commentary Style</label>
+              <select id="voice-style">
+                <option value="tactical">AWACS Tactical (Military Jet Pilot HUD)</option>
+                <option value="cozy">Cozy Observer (Scenic flight details)</option>
+                <option value="disabled">Mute Voice Commentary</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="voice-interval">Update Interval</label>
+              <select id="voice-interval">
+                <option value="15">Every 15 seconds (High activity)</option>
+                <option value="30" selected>Every 30 seconds</option>
+                <option value="60">Every 60 seconds</option>
+                <option value="120">Every 2 minutes</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="voice-select">Voice Synthesizer</label>
+              <select id="voice-select">
+                <option value="default">System Default</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>🌌 PROJECTOR AND STARFIELD OPTICS</h3>
+            <div class="input-group inline">
+              <div>
+                <label>Projection Rotation</label>
+                <select id="projection-rotation">
+                  <option value="0">0° (Normal)</option>
+                  <option value="90">90° CW</option>
+                  <option value="180">180°</option>
+                  <option value="270">270° CW</option>
+                </select>
+              </div>
+              <div>
+                <label>Mirror Options</label>
+                <div class="checkbox-group">
+                  <label class="checkbox-container">
+                    <input type="checkbox" id="mirror-h"> Horizontal Flip
+                  </label>
+                  <label class="checkbox-container">
+                    <input type="checkbox" id="mirror-v"> Vertical Flip
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="input-group inline">
+              <div>
+                <label for="star-count">Twinkling Stars Density</label>
+                <input type="range" id="star-count" min="500" max="3000" step="100" value="1500">
+              </div>
+              <div>
+                <label for="star-speed">Star Drifting Speed</label>
+                <input type="range" id="star-speed" min="0" max="50" step="5" value="15">
+              </div>
+            </div>
+            <div class="input-group inline">
+              <div>
+                <label for="radar-range-filter">Radar Radius Range (NM)</label>
+                <input type="range" id="radar-range-filter" min="10" max="250" step="10" value="100">
+              </div>
+              <div>
+                <label for="trail-length">Flight Path History Trail</label>
+                <input type="range" id="trail-length" min="5" max="60" step="5" value="30">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-footer">
+          <button id="save-settings-btn" class="hud-btn positive">APPLY SETTINGS</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Sound effects files (using Web Audio API synth if audio files are not available) -->
+  <!-- Loaded scripts -->
+  <script src="airlines_db.js"></script>
+  <script src="app.js?v=unfreeze_v1"></script>
+</body>
+</html>

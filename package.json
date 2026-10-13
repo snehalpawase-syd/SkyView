@@ -1,0 +1,15 @@
+{
+  "name": "skyview-flight-tracker",
+  "version": "1.0.0",
+  "description": "Ceiling-projected real-time flight tracker with interactive starfield, HUD, and voice commentary.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "author": "Antigravity Pair Programmer",
+  "license": "MIT"
+}
